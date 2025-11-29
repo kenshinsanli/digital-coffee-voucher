@@ -1,0 +1,132 @@
+╔════════════════════════════════════════════════════════════════════════════════╗
+║                     🚀 快速上架到 GitHub - 5分鐘指南                              ║
+╚════════════════════════════════════════════════════════════════════════════════╝
+
+📁 項目位置：f:\bata\digital-coffee-voucher
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+🎯 3 種上架方式
+
+【方式 1】最簡單 - 雙擊運行腳本（推薦 Windows 用戶）
+  1. 打開資源管理器，進入 f:\bata\digital-coffee-voucher
+  2. 雙擊 upload-to-github.bat
+  3. 按提示輸入 GitHub 用戶名
+  4. 完成！✅
+
+【方式 2】最快速 - 複製貼上指令
+  1. 打開 PowerShell
+  2. 執行以下指令：
+
+     cd f:\bata\digital-coffee-voucher
+     git init
+     git add .
+     git commit -m "Initial commit: Add digital coffee voucher app"
+     git remote add origin https://github.com/YOUR_USERNAME/digital-coffee-voucher.git
+     git branch -M main
+     git push -u origin main
+
+  3. 出現提示時輸入 GitHub 帳戶憑證
+  4. 完成！✅
+
+【方式 3】最圖形 - 使用 GitHub Desktop
+  1. 下載 GitHub Desktop：https://desktop.github.com
+  2. 登入 GitHub 帳戶
+  3. File → Add Local Repository
+  4. 選擇 f:\bata\digital-coffee-voucher
+  5. Publish repository 按鈕
+  6. 完成！✅
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+⚙️ 前置準備（必須）
+
+□ 已安裝 Git：https://git-scm.com/download/win
+□ 已註冊 GitHub 帳號：https://github.com
+□ 已配置 Git：
+  git config --global user.name "Your Name"
+  git config --global user.email "your.email@example.com"
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+📋 上架前檢查清單
+
+□ 項目包含的文件：
+  ✓ App.tsx - 主應用代碼
+  ✓ app.json - Expo 配置
+  ✓ package.json - 依賴列表
+  ✓ README.md - 完整文檔
+  ✓ LICENSE - MIT 許可證
+  ✓ .gitignore - Git 配置
+  ✓ 其他文檔文件
+
+□ 在 GitHub 創建新倉庫：
+  1. 訪問 https://github.com
+  2. 登入帳戶
+  3. 右上角 + → New repository
+  4. Repository name: digital-coffee-voucher
+  5. Public（推薦）
+  6. 不選「Initialize with README」等選項
+  7. Create repository
+
+□ 準備好 GitHub 用戶名（用於上架指令）
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+🔑 必需替換的部分
+
+在上面的指令中，將以下部分替換為您的信息：
+
+  YOUR_USERNAME → 您的 GitHub 帳戶名稱
+
+例子：
+  https://github.com/john-doe/digital-coffee-voucher.git
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+✅ 成功標誌
+
+上架成功後，您將看到：
+  ✓ 終端顯示 "Everything up-to-date" 或 "Enumerating..."
+  ✓ 可訪問 https://github.com/YOUR_USERNAME/digital-coffee-voucher
+  ✓ 所有文件在 GitHub 上可見
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+❓ 常見問題
+
+Q: 出現 "authentication failed" 錯誤？
+A: 使用 Personal Access Token 而非密碼
+   設置：https://github.com/settings/tokens
+
+Q: 如何修改已上架的代碼？
+A: 
+   git add .
+   git commit -m "feat: update something"
+   git push origin main
+
+Q: 想要編輯 README 或其他文件？
+A: 直接在本地修改後，按上面的步驟推送即可
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+📚 詳細文檔
+
+本項目包含完整的文檔：
+  • README.md - 項目完整說明
+  • CONTRIBUTING.md - 如何貢獻
+  • SECURITY.md - 安全政策
+  • GITHUB_UPLOAD_GUIDE.md - 詳細上架指南
+  • PROJECT_CHECKLIST.md - 項目清單
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+🎉 準備好了嗎？
+
+選擇上面的任一種方式，按照步驟操作即可！
+
+有任何問題，查看 GITHUB_UPLOAD_GUIDE.md 獲取詳細幫助。
+
+祝上架順利！🚀
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

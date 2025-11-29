@@ -1,0 +1,44 @@
+{
+  "expo": {
+    "name": "Digital Coffee Voucher",
+    "slug": "digital-coffee-voucher",
+    "version": "1.0.0",
+    "assetBundlePatterns": [
+      "**/*"
+    ],
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.coffeestore.voucher",
+      "buildNumber": "1",
+      "infoPlist": {
+        "NSCameraUsageDescription": "This app needs camera access to display QR codes"
+      }
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#121212"
+      },
+      "package": "com.coffeestore.voucher",
+      "versionCode": 1,
+      "permissions": [
+        "android.permission.INTERNET"
+      ]
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "scheme": "digitalcoffeevoucher",
+    "plugins": [
+      [
+        "expo-screen-capture",
+        {
+          "disableScreenCapture": true
+        }
+      ],
+      [
+        "expo-brightness"
+      ]
+    ]
+  }
+}
