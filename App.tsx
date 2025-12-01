@@ -5,21 +5,19 @@ import * as ScreenCapture from 'expo-screen-capture';
 import * as Brightness from 'expo-brightness';
 import { Ionicons } from '@expo/vector-icons';
 
-
-// 【FIX 1】資安：日誌防護封裝
-// 在生產環境中靜音 Log，防止敏感資訊透過 ADB/Console 洩露
+// 【資安防護】生產環境靜音 Log
 const Logger = {
   log: (...args) => { if (__DEV__) console.log(...args); },
   warn: (...args) => { if (__DEV__) console.warn(...args); },
   error: (...args) => { if (__DEV__) console.error(...args); }
 };
 
-
 // 模擬後端 API
 const mockBackendFetchTicket = async () => {
-  await new Promise(r => setTimeout(r, 800));
+  await new Promise(r => setTimeout(r, 800)); // 模擬網路延遲
   const now = Date.now();
   const expiresInSeconds = 60;
+  
   return {
     ticketId: "TICKET_" + Math.random().toString(36).substr(2, 9).toUpperCase(),
     signature: "sha256_mock_signature_" + now,
@@ -28,57 +26,62 @@ const mockBackendFetchTicket = async () => {
   };
 };
 
-
 export default function App() {
+  // --- 狀態管理 ---
   const [ticketData, setTicketData] = useState(null);
-  const [status, setStatus] = useState('loading');
+  const [status, setStatus] = useState('loading'); // loading, success, error, screenshot_detected
   const [timeLeft, setTimeLeft] = useState(60);
   const [isQrRevealed, setIsQrRevealed] = useState(false);
   const [layoutWidth, setLayoutWidth] = useState(0);
 
-
+  // --- Refs & 動畫 ---
   const progressAnim = useRef(new Animated.Value(1)).current;
   const timerRef = useRef(null);
   const appState = useRef(AppState.currentState);
   const isMounted = useRef(true);
   const screenshotSubscriptionRef = useRef(null);
   const previousBrightnessRef = useRef(null);
- 
+  
+  // 解決 Closure 陷阱的 Ref
   const statusRef = useRef(status);
+  
+  // 網路請求中斷控制器
+  const fetchAbortController = useRef(null);
 
+  // 【Fix: 新增 Ref】用於追蹤並取消亮度恢復的 Timer，解決競態條件
+  const brightnessTimeoutRef = useRef(null);
 
+  // 同步 status 到 Ref
   useEffect(() => {
     statusRef.current = status;
   }, [status]);
 
-
+  // --- 初始化與生命週期 ---
   useEffect(() => {
     isMounted.current = true;
-   
-    // 初始化權限
+    
+    // 初始化權限與設定
     (async () => {
       try {
         await ScreenCapture.preventScreenCaptureAsync();
-        await Brightness.requestPermissionsAsync();
-        // 注意：這裡不急著獲取 previousBrightness，改用 Lazy Load 策略
+        const { status } = await Brightness.requestPermissionsAsync();
+        if (status !== 'granted') Logger.warn('Brightness permission denied');
       } catch (e) { Logger.warn('Init warning:', e); }
     })();
 
-
     setupSecurityListener();
-    refreshTicketCycle();
+    refreshTicketCycle(); // 初始獲取
 
-
+    // App 狀態監聽 (背景/前景切換)
     const subscription = AppState.addEventListener('change', nextAppState => {
       if (appState.current.match(/inactive|background/) && nextAppState === 'active') {
         checkValidityOnResume();
       }
       if (nextAppState.match(/inactive|background/)) {
-        restoreBrightness();
+        restoreBrightness(); // 切換到背景時恢復亮度
       }
       appState.current = nextAppState;
     });
-
 
     return () => {
       isMounted.current = false;
@@ -87,10 +90,20 @@ export default function App() {
       if (screenshotSubscriptionRef.current) screenshotSubscriptionRef.current.remove();
       ScreenCapture.allowScreenCaptureAsync();
       restoreBrightness();
+      
+      // 組件卸載時取消未完成的請求
+      if (fetchAbortController.current) {
+        fetchAbortController.current.abort();
+      }
+      
+      // 【Fix】組件卸載時，若有等待中的亮度恢復計時器，一併清除
+      if (brightnessTimeoutRef.current) {
+        clearTimeout(brightnessTimeoutRef.current);
+      }
     };
-  }, []);
+  }, []); // 依賴項為空，只執行一次
 
-
+  // --- 安全邏輯 ---
   const setupSecurityListener = () => {
     screenshotSubscriptionRef.current = ScreenCapture.addScreenshotListener(() => {
       if (isMounted.current) {
@@ -99,35 +112,25 @@ export default function App() {
     });
   };
 
-
   const handleScreenshotDetected = useCallback(() => {
     stopCountdown();
     restoreBrightness();
+    
+    // 取消任何進行中的請求
+    if (fetchAbortController.current) fetchAbortController.current.abort();
+    
     setTicketData(null);
     setStatus('screenshot_detected');
-    // 使用 Alert 而非 console.warn，避免日誌殘留
     Alert.alert("⚠️ 安全警告", "偵測到截圖！條碼已失效。");
   }, []);
 
-
-  const stopCountdown = () => {
-    if (timerRef.current) {
-      clearInterval(timerRef.current);
-      timerRef.current = null;
-    }
-  };
-
-
-  // 【FIX 3】修復亮度控制 Bug：採用 Lazy Loading 策略
-  // 即使初始化時沒權限，只要使用者後來給了權限，這裡就能正常運作
+  // --- 亮度控制邏輯 ---
   const maximizeBrightness = async () => {
     try {
       const { status } = await Brightness.getPermissionsAsync();
       if (status !== 'granted') return;
 
-
-      // 每次要調亮之前，才去記錄當下的亮度，保證是最新的
-      // 並檢查是否已經記錄過（避免多次調用導致記錄到 1.0）
+      // 僅在尚未記錄時記錄當前亮度
       if (previousBrightnessRef.current === null) {
         previousBrightnessRef.current = await Brightness.getBrightnessAsync();
       }
@@ -135,80 +138,86 @@ export default function App() {
     } catch (e) { Logger.warn('Brightness set error:', e); }
   };
 
-
   const restoreBrightness = async () => {
     try {
       if (previousBrightnessRef.current !== null) {
         await Brightness.setBrightnessAsync(previousBrightnessRef.current);
-        // 恢復後清空記錄，以便下次重新獲取
-        previousBrightnessRef.current = null;
+        previousBrightnessRef.current = null; // 重置
       }
     } catch (e) { Logger.warn('Brightness restore error:', e); }
   };
 
-
+  // --- 互動處理 (已修復競態條件 Bug) ---
   const handlePressIn = () => {
     if (statusRef.current !== 'success') return;
+
+    // 【Fix】若有正在倒數的「變暗」排程，立即取消，防止手指按著時螢幕變暗
+    if (brightnessTimeoutRef.current) {
+      clearTimeout(brightnessTimeoutRef.current);
+      brightnessTimeoutRef.current = null;
+    }
+
     setIsQrRevealed(true);
     maximizeBrightness();
   };
 
-
   const handlePressOut = () => {
-    setTimeout(() => {
+    // 【Fix】將 Timer ID 存入 Ref，以便可以被取消
+    brightnessTimeoutRef.current = setTimeout(() => {
       if (isMounted.current) {
         setIsQrRevealed(false);
         restoreBrightness();
+        brightnessTimeoutRef.current = null; // 執行完畢後清空引用
       }
     }, 500);
   };
 
-
-  // 【FIX 4】正規化重試邏輯：接受 forceRetry 參數
+  // --- 核心邏輯：獲取票券 ---
   const refreshTicketCycle = useCallback(async (forceRetry = false) => {
-    // 如果不是強制重試，且當前狀態是截圖偵測，則阻擋
+    // 安全檢查
     if (!isMounted.current || (!forceRetry && statusRef.current === 'screenshot_detected')) return;
-   
+    
+    // 1. 取消上一次未完成的請求
+    if (fetchAbortController.current) {
+      fetchAbortController.current.abort();
+    }
+    // 2. 建立新的控制器
+    fetchAbortController.current = new AbortController();
+    const currentSignal = fetchAbortController.current.signal;
+
     try {
       setStatus(prev => (prev === 'error' || !ticketData) ? 'loading' : 'success');
-     
-      const data = await mockBackendFetchTicket();
-     
-      // 再次檢查
-      if (!isMounted.current || (!forceRetry && statusRef.current === 'screenshot_detected')) return;
-
+      
+      const data = await mockBackendFetchTicket(); 
+      
+      // 3. 請求完成後檢查
+      if (currentSignal.aborted) return;
+      if (!isMounted.current) return;
+      if (!forceRetry && statusRef.current === 'screenshot_detected') return;
 
       setTicketData(data);
       setStatus('success');
       startCountdown(data.expiresAt, data.validSeconds);
 
-
     } catch (error) {
+      if (currentSignal.aborted) return;
       Logger.error("Fetch Error", error);
       if (isMounted.current) setStatus('error');
     }
-  }, [ticketData]);
+  }, [ticketData]); 
 
-
+  // --- 倒數計時邏輯 ---
   const startCountdown = (expiresAt, totalDuration) => {
     stopCountdown();
 
-
-    // 【FIX 2】邏輯漏洞修復：防止時鐘偏差導致的無限 API 轟炸
     const now = Date.now();
     const remainingSeconds = Math.ceil((expiresAt - now) / 1000);
 
-
-    // 如果後端給的時間已經過期，或者剩餘時間極短（例如 < 5秒）
-    // 我們不應該啟動倒數，也不應該立即刷新（防止無限迴圈）
-    // 而是應該顯示錯誤，或等待一段緩衝時間
     if (remainingSeconds <= 2) {
         Logger.warn("Ticket expired on arrival or clock drift detected.");
-        // 強制延遲 3 秒後再試，避免 DDOS
         setTimeout(() => refreshTicketCycle(false), 3000);
         return;
     }
-
 
     progressAnim.setValue(1);
     Animated.timing(progressAnim, {
@@ -218,41 +227,40 @@ export default function App() {
       useNativeDriver: true,
     }).start();
 
-
     timerRef.current = setInterval(() => {
       if (!isMounted.current) return;
-
 
       if (statusRef.current === 'screenshot_detected') {
         stopCountdown();
         return;
       }
 
-
       const currentNow = Date.now();
       const currentRemaining = Math.max(0, Math.ceil((expiresAt - currentNow) / 1000));
       setTimeLeft(currentRemaining);
 
-
       if (currentNow >= expiresAt) {
         stopCountdown();
-        refreshTicketCycle();
+        refreshTicketCycle(); // 自動刷新
       }
     }, 200);
   };
 
+  const stopCountdown = () => {
+    if (timerRef.current) {
+      clearInterval(timerRef.current);
+      timerRef.current = null;
+    }
+  };
 
   const checkValidityOnResume = () => {
     if (statusRef.current === 'screenshot_detected') return;
-    // 這裡同樣要做時鐘偏差保護
     if (!ticketData || Date.now() >= ticketData.expiresAt - 2000) {
       refreshTicketCycle();
     }
   };
 
-
-  // UI RENDERERS
- 
+  // --- UI Render ---
   const renderQrSection = () => {
       if (!ticketData) return null;
       return (
@@ -269,7 +277,11 @@ export default function App() {
           >
             {isQrRevealed ? (
               <View style={styles.qrBox}>
-                <QRCode value={JSON.stringify({ id: ticketData.ticketId, sig: ticketData.signature })} size={200} />
+                <QRCode 
+                  value={JSON.stringify({ id: ticketData.ticketId, sig: ticketData.signature })} 
+                  size={200} 
+                  quietZone={10}
+                />
               </View>
             ) : (
               <View style={styles.maskBox}>
@@ -279,7 +291,7 @@ export default function App() {
               </View>
             )}
           </Pressable>
-         
+          
           <View
             style={[styles.progressContainer, { opacity: layoutWidth === 0 ? 0 : 1 }]}
             onLayout={(e) => setLayoutWidth(e.nativeEvent.layout.width)}
@@ -305,7 +317,6 @@ export default function App() {
       );
     };
 
-
   const renderContent = () => {
     switch (status) {
       case 'screenshot_detected':
@@ -314,10 +325,9 @@ export default function App() {
             <Ionicons name="warning" size={50} color="#d32f2f" />
             <Text style={styles.errorText}>截圖偵測</Text>
             <Text style={styles.errorDesc}>條碼已失效，請重新獲取</Text>
-           
+            
             <TouchableOpacity
                 style={styles.retryBtn}
-                // 【FIX 4】使用參數控制重試，避免手動操作 Ref
                 onPress={() => refreshTicketCycle(true)}
             >
                <Text style={styles.retryText}>重新獲取</Text>
@@ -327,6 +337,7 @@ export default function App() {
       case 'error':
         return (
             <View style={styles.centerBox}>
+                <Ionicons name="cloud-offline" size={50} color="#666" />
                 <Text style={styles.errorText}>連線錯誤</Text>
                 <TouchableOpacity
                     style={styles.retryBtn}
@@ -336,11 +347,18 @@ export default function App() {
                 </TouchableOpacity>
             </View>
         );
-      case 'loading': return (<View style={styles.centerBox}><ActivityIndicator size="large" color="#4caf50" /><Text style={styles.loadingText}>連線中...</Text></View>);
-      case 'success': default: return renderQrSection();
+      case 'loading': 
+        return (
+          <View style={styles.centerBox}>
+            <ActivityIndicator size="large" color="#4caf50" />
+            <Text style={styles.loadingText}>連線中...</Text>
+          </View>
+        );
+      case 'success': 
+      default: 
+        return renderQrSection();
     }
   };
-
 
   return (
     <View style={styles.container}>
@@ -350,7 +368,6 @@ export default function App() {
     </View>
   );
 }
-
 
 const styles = StyleSheet.create({
     container: { flex: 1, backgroundColor: '#121212', alignItems: 'center', justifyContent: 'center' },
@@ -375,4 +392,4 @@ const styles = StyleSheet.create({
     timerText: { marginTop: 10, fontSize: 12, color: '#aaa', fontFamily: 'Courier' },
     progressContainer: { width: 220, height: 6, backgroundColor: '#f1f1f1', borderRadius: 3, marginTop: 25, overflow: 'hidden',  justifyContent: 'center' },
     progressBar: { height: '100%', borderRadius: 3 },
-  });
+});
